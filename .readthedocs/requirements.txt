@@ -1,2 +1,0 @@
--r ../requirements/_.txt
--r ../requirements/docs.txt
