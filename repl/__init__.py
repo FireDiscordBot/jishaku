@@ -24,22 +24,15 @@ def get_var_dict_from_ctx(ctx: commands.Context):
     Returns the dict to be used in REPL for a given Context.
     """
 
-    return {
+    vardict =  {
         'me': ctx.author,
         'fire': ctx.bot,
         'self': ctx.bot.get_cog('Jishaku'),
-        'MAIN': ctx.bot.get_cog('Main Commands'),
-        'MUSIC': ctx.bot.get_cog('Music'),
-        'HYPIXEL': ctx.bot.get_cog('Hypixel Commands'),
-        'YOUTUBE': ctx.bot.get_cog('YouTube API'),
         'ksoft': ctx.bot.ksoft,
-        'UTILS': ctx.bot.get_cog('Utility Commands'),
-        'SETTINGS': ctx.bot.get_cog('Settings'),
-        'MOD': ctx.bot.get_cog('Mod Commands'),
-        'API': ctx.bot.get_cog('Fire API'),
-        'PREMIUM': ctx.bot.get_cog('Premium Commands'),
         'channel': ctx.channel,
         'ctx': ctx,
         'guild': ctx.guild,
         'message': ctx.message
     }
+    vardict.update({k: getattr(ctx.bot, k) for k in dir(ctx.bot)})
+    return vardict

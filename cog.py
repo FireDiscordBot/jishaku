@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 
 """
-jishaku.cog
+jishaku
 ~~~~~~~~~~~
 
 The Jishaku debugging and diagnostics cog.
 
-:copyright: (c) 2019 Devon (Gorialis) R
+:copyright: 2019 Devon (Gorialis), 2020 GamingGeek
 :license: MIT, see LICENSE for more details.
 
 """
@@ -60,8 +60,6 @@ JISHAKU_RETAIN = os.getenv("JISHAKU_RETAIN", "").lower() in ENABLED_SYMBOLS
 
 CommandTask = collections.namedtuple("CommandTask", "index ctx task")
 
-print('Loading Jishaku....')
-
 
 class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
     """
@@ -78,7 +76,6 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         self.start_time = datetime.datetime.now()
         self.tasks = collections.deque()
         self.task_count: int = 0
-        self.bot.acknowledgements = {}
 
     @property
     def scope(self):
@@ -119,32 +116,10 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         """
         Local check, makes all commands in this cog owner-only
         """
-        if ctx.bot.authenticated:
-            if not await ctx.bot.is_team_owner(ctx.author):
-                raise commands.NotOwner("You must own this bot to use Jishaku.")
-            return True
-        else:
-            noauth = await ctx.send('<:xmark:674359427830382603> Not Authenticated! Authenticate now to continue.')
-            try:
-                await self.bot.wait_for('admin_authenticate', timeout=30.0)
-                await noauth.edit(content='<:check:674359197378281472> Successfully authenticated! Executing command...')
-                if await ctx.bot.is_team_owner(ctx.author):
-                    return True
-                else:
-                    raise commands.NotOwner("You must own this bot to use Jishaku.")
-            except asyncio.TimeoutError:
-                await noauth.edit(content='<:xmark:674359427830382603> Not Authenticated!')
+        if not await ctx.bot.is_owner(ctx.author):
+            raise commands.NotOwner("You must own this bot to use Jishaku.")
+        return True
 
-    async def loadacks(self):
-        self.bot.acknowledgements = {}
-        query = 'SELECT * FROM ack;'
-        acks = await self.bot.db.fetch(query)
-        for a in acks:
-            self.bot.acknowledgements[a['uid']] = a['acks']
-
-    @commands.Cog.listener()
-    async def on_ready(self):
-        await self.loadacks()
 
     @commands.group(name="admin", aliases=["administration", "jsk"], hidden=JISHAKU_HIDE,
                     invoke_without_command=True, ignore_extra=False)
@@ -251,16 +226,25 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         url = url.lstrip("<").rstrip(">")
         if 'api.hypixel.net' in url:
             if '?' in url:
-                url = f'{url}&key={self.bot.hypixelkey}'
+                url = f'{url}&key={self.bot.config["hypixel"][0]}'
             else:
-                url = f'{url}?key={self.bot.hypixelkey}'
+                url = f'{url}?key={self.bot.config["hypixel"][0]}'
 
         async with ReplResponseReactor(ctx):
             async with aiohttp.ClientSession(headers={'User-Agent': 'Fire Discord Bot'}) as session:
                 async with session.get(url) as response:
-                    if 'application/json' in response.headers.get('Content-Type', 'text/html').lower():
+                    content_type = response.headers.get('Content-Type', 'text/plain').lower()
+                    if content_type == 'application/json':
                         data = await response.json()
                         data = json.dumps(data, indent=2).encode('utf-8')
+                    elif content_type.startswith('image/'):
+                        ext = content_type.split('image/')[-1]
+                        f = discord.File(io.BytesIO((await response.read())), filename=f'image.{ext}')
+                        return await ctx.send(file=f)
+                    elif any(ext in content_type for ext in ['png', 'jpg', 'jpeg', 'gif']):
+                        ext = [ext for ext in ['png', 'jpg', 'jpeg', 'gif'] if ext in content_type][0]
+                        f = discord.File(io.BytesIO((await response.read())), filename=f'image.{ext}')
+                        return await ctx.send(file=f)
                     else:
                         data = await response.read()
                     hints = (
@@ -308,25 +292,28 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         If the index passed is -1, will cancel the last task instead.
         """
 
-        if not self.tasks:
-            return await ctx.send("No tasks to cancel.")
 
-        if index == -1 and not name:
-            task = self.tasks.pop()
+        if not self.tasks:
+            return await ctx.error("No tasks to cancel.")
+
         if index == -1 and name:
             for task in self.tasks.copy():
                 if task.ctx.command.qualified_name == name:
-                    self.tasks.remove(task)
+                    task = discord.utils.get(self.tasks, index=task.index)
+                    if task:
+                        task.task.cancel()
+                        self.tasks.remove(task)
             return await ctx.success('Successfully canceled tasks')
+        elif index == -1:
+            index = self.tasks[-1].index
+        task = discord.utils.get(self.tasks, index=index)
+        if task:
+            self.tasks.remove(task)
         else:
-            task = discord.utils.get(self.tasks, index=index)
-            if task:
-                self.tasks.remove(task)
-            else:
-                return await ctx.send("Unknown task.")
+            return await ctx.error("Unknown task.")
 
         task.task.cancel()
-        return await ctx.send(f"Cancelled task {task.index}: `{task.ctx.command.qualified_name}`,"
+        return await ctx.success(f"Cancelled task {task.index}: `{task.ctx.command.qualified_name}`,"
                               f" invoked at {task.ctx.message.created_at.strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
     @jsk.command(name="retain")
@@ -516,17 +503,19 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
 
         paginator = commands.Paginator(prefix='', suffix='')
 
+        tasks = None
         for extension in itertools.chain(*extensions):
             if extension == 'api.main':
                 try:
-                    self.bot.realtime_members = False
                     await self.bot.get_cog('Fire API').stop()
                 except Exception:
-                    do = 'nothing'
+                    pass
                 modules = sys.modules.copy()
                 for m in modules:
                     if m.startswith('api.endpoints'):
                         sys.modules.pop(m)
+            if extension == 'jishaku':
+                tasks = self.tasks.copy()
             method, icon = (
                 (self.bot.reload_extension, "\N{CLOCKWISE RIGHTWARDS AND LEFTWARDS OPEN CIRCLE ARROWS}")
                 if extension in self.bot.extensions else
@@ -543,9 +532,9 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
                 )
             else:
                 paginator.add_line(f"{icon} `{extension}`", empty=True)
+                if tasks:
+                    self.bot.get_cog('Jishaku').tasks = tasks
 
-        await self.loadacks()
-        self.bot.realtime_members = True
 
         for page in paginator.pages:
             await ctx.send(page)
@@ -586,62 +575,28 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
             query = 'INSERT INTO vanity (\"gid\", \"code\", \"invite\") VALUES ($1, $2, $3);'
             await self.bot.db.execute(query, gid, code, inv)
         await self.bot.db.release(con)
-        await self.bot.get_cog('Utility Commands').loadvanitys()
-        return await ctx.success(f'Successfully created https://inv.wtf/{code}')
+        await self.bot.get_cog('Vanity URLs').request_fetch()
+        return await ctx.success(f'Successfully created https://{"test." if self.bot.dev else ""}inv.wtf/{code}')
 
     @jsk.command(name='setdesc')
     async def jsk_setdesc(self, ctx, gid: int, *, desc: str):
         await self.bot.configs[gid].set('main.description', desc)
         return await ctx.success(f'Successfully set description')
 
-    @jsk.command(name='ack')
-    async def jsk_ack(self, ctx, user: UserWithFallback, *, ack: str):  # no this doesn't mark messages as read
-        if user.id not in self.bot.acknowledgements:
-            con = await self.bot.db.acquire()
-            async with con.transaction():
-                query = 'INSERT INTO ack (\"uid\", \"acks\") VALUES ($1, $2);'
-                await self.bot.db.execute(query, user.id, [ack])
-            await self.bot.db.release(con)
-        else:
-            acks = self.bot.acknowledgements[user.id]
-            acks.append(ack)
-            con = await self.bot.db.acquire()
-            async with con.transaction():
-                query = 'UPDATE ack SET \"acks\"=$2 WHERE uid = $1;'
-                await self.bot.db.execute(query, user.id, acks)
-            await self.bot.db.release(con)
-        await self.loadacks()
-        return await ctx.success(f'Successfully added acknowledgement')
-
-    @jsk.command(name='delack')
-    async def jsk_delack(self, ctx, user: UserWithFallback, *, ack: str):  # no this doesn't mark messages as read
-        if user.id in self.bot.acknowledgements and ack in self.bot.acknowledgements[user.id]:
-            acks = self.bot.acknowledgements[user.id]
-            if ack not in acks:
-                return await ctx.error('Acknowledgement not found')
-            acks.remove(ack)
-            con = await self.bot.db.acquire()
-            async with con.transaction():
-                query = 'UPDATE ack SET \"acks\"=$2 WHERE uid = $1;'
-                await self.bot.db.execute(query, user.id, acks)
-            await self.bot.db.release(con)
-        else:
-            return await ctx.error('User has no acknowledgements')
-        await self.loadacks()
-        return await ctx.success(f'Successfully deleted acknowledgement')
-
     @jsk.command(name='alias')
     async def jsk_alias(self, ctx, user: UserWithFallback, *, alias: str):
         if alias.lower() == 'hasalias':
             return await ctx.error('"hasalias" cannot be used as an alias')
-        if user.id not in self.bot.aliases['hasalias']:
+        hasalias = json.loads((await self.bot.redis.get('hasalias', encoding='utf-8')))
+        if user.id not in hasalias:
             con = await self.bot.db.acquire()
             async with con.transaction():
                 query = 'INSERT INTO aliases (\"uid\", \"aliases\") VALUES ($1, $2);'
                 await self.bot.db.execute(query, user.id, [alias])
             await self.bot.db.release(con)
         else:
-            aliases = [a for a in self.bot.aliases if a != 'hasalias' and self.bot.aliases[a] == user.id]
+            aliases = json.loads((await self.bot.redis.get('aliases', encoding='utf-8')))
+            aliases = [a for a in aliases if aliases[a] == user.id]
             aliases.append(alias)
             con = await self.bot.db.acquire()
             async with con.transaction():
@@ -846,7 +801,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
             #  the command more compatible with chaining, e.g. `jsk in .. jsk su ..`
             target = ctx.guild.get_member(target.id) or target
 
-        alt_ctx = await copy_context_with(ctx, author=target, content=ctx.prefix + command_string)
+        alt_ctx = await copy_context_with(ctx, author=target, content=ctx.prefix + command_string, silent=ctx.silent)
 
         if alt_ctx.command is None:
             if alt_ctx.invoked_with is None:
@@ -861,7 +816,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         Run a command as if it were in a different channel.
         """
 
-        alt_ctx = await copy_context_with(ctx, channel=channel, content=ctx.prefix + command_string)
+        alt_ctx = await copy_context_with(ctx, channel=channel, content=ctx.prefix + command_string, silent=ctx.silent)
 
         if alt_ctx.command is None:
             return await ctx.send(f'Command "{alt_ctx.invoked_with}" is not found')
@@ -876,7 +831,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         This also bypasses permission checks so this has a high possibility of making a command raise.
         """
 
-        alt_ctx = await copy_context_with(ctx, content=ctx.prefix + command_string)
+        alt_ctx = await copy_context_with(ctx, content=ctx.prefix + command_string, silent=ctx.silent)
 
         if alt_ctx.command is None:
             return await ctx.send(f'Command "{alt_ctx.invoked_with}" is not found')
@@ -892,7 +847,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
 
         with self.submit(ctx):  # allow repeats to be cancelled
             for _ in range(times):
-                alt_ctx = await copy_context_with(ctx, content=ctx.prefix + command_string)
+                alt_ctx = await copy_context_with(ctx, content=ctx.prefix + command_string, silent=ctx.silent)
 
                 if alt_ctx.command is None:
                     return await ctx.send(f'Command "{alt_ctx.invoked_with}" is not found')
@@ -905,7 +860,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         Run a command timing execution and catching exceptions.
         """
 
-        alt_ctx = await copy_context_with(ctx, content=ctx.prefix + command_string)
+        alt_ctx = await copy_context_with(ctx, content=ctx.prefix + command_string, silent=ctx.silent)
 
         if alt_ctx.command is None:
             return await ctx.send(f'Command "{alt_ctx.invoked_with}" is not found')
@@ -950,7 +905,6 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         Logs this bot out.
         """
 
-        await ctx.send("Logging out now..")
         await ctx.bot.logout()
 
 

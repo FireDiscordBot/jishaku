@@ -22,6 +22,9 @@ async def copy_context_with(ctx: commands.Context, *, author=None, channel=None,
     Makes a new :class:`Context` with changed message properties.
     """
 
+    if silent := kwargs.pop('silent', False):
+        if kwargs.get('content', None):
+            kwargs['content'] = kwargs['content'] + ' --silent'
     # copy the message and update the attributes
     alt_message: discord.Message = copy.copy(ctx.message)
     alt_message._update(kwargs)  # pylint: disable=protected-access

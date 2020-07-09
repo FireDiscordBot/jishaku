@@ -52,6 +52,8 @@ class PaginatorInterface:  # pylint: disable=too-many-instance-attributes
         self.message = None
         self.paginator = paginator
 
+        self.replaced = False
+
         self.owner = kwargs.pop('owner', None)
         self.emojis = kwargs.pop('emoji', EMOJI_DEFAULT)
         self.timeout = kwargs.pop('timeout', 600)
@@ -161,6 +163,14 @@ class PaginatorInterface:  # pylint: disable=too-many-instance-attributes
 
         self.message = await destination.send(**self.send_kwargs)
 
+        if self.message.id in self.bot.paginators:
+            old = self.bot.paginators.pop(self.message.id)
+            old.replaced = True
+            old.task.cancel()
+            del old
+
+        self.bot.paginators[self.message.id] = self
+
         # add the close reaction
         await self.message.add_reaction(self.emojis.close)
 
@@ -183,7 +193,8 @@ class PaginatorInterface:  # pylint: disable=too-many-instance-attributes
         """
 
         for emoji in filter(None, self.emojis):
-            await self.message.add_reaction(emoji)
+            if emoji not in [r.emoji for r in self.message.reactions]:
+                await self.message.add_reaction(emoji)
         self.sent_page_reactions = True
 
     @property
@@ -233,6 +244,7 @@ class PaginatorInterface:  # pylint: disable=too-many-instance-attributes
                     emoji = emoji.name
 
                 if emoji == close:
+                    self.bot.paginators.pop(self.message.id)
                     await self.message.delete()
                     return
 
@@ -253,14 +265,16 @@ class PaginatorInterface:  # pylint: disable=too-many-instance-attributes
                     pass
 
         except (asyncio.CancelledError, asyncio.TimeoutError):
+            self.bot.paginators.pop(self.message.id)
             if self.delete_message:
                 return await self.message.delete()
 
-            for emoji in filter(None, self.emojis):
-                try:
-                    await self.message.remove_reaction(emoji, self.message.guild.me if self.message.guild else self.bot.user)
-                except (discord.Forbidden, discord.NotFound):
-                    pass
+            if not self.replaced:
+                for emoji in filter(None, self.emojis):
+                    try:
+                        await self.message.remove_reaction(emoji, self.message.guild.me if self.message.guild else self.bot.user)
+                    except (discord.Forbidden, discord.NotFound):
+                        pass
 
     async def update(self):
         """
@@ -293,7 +307,7 @@ class PaginatorEmbedInterface(PaginatorInterface):
     """
 
     def __init__(self, *args, **kwargs):
-        self._embed = kwargs.pop('_embed', None)
+        self._embed = kwargs.pop('_embed', discord.Embed())
         self._footer = kwargs.pop('_footer', '')
         super().__init__(*args, **kwargs)
 
