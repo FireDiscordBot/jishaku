@@ -592,7 +592,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         return await ctx.success(f'Successfully blacklisted {guild} from vanity features!')
 
     @jsk.command(name='vanityubl')
-    async def jsk_vanitybl(self, ctx, gid: int):
+    async def jsk_vanityubl(self, ctx, gid: int):
         guild = self.bot.get_guild(gid)
         if not guild:
             return await ctx.error(f'Unknown Guild')
