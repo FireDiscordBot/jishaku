@@ -68,7 +68,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
 
     load_time = datetime.datetime.now()
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot):
         self.bot = bot
         self._scope = Scope()
         self.retain = JISHAKU_RETAIN
@@ -577,6 +577,31 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         await self.bot.db.release(con)
         await self.bot.get_cog('Vanity URLs').request_fetch()
         return await ctx.success(f'Successfully created https://{"test." if self.bot.dev else ""}inv.wtf/{code}')
+
+    @jsk.command(name='vanitybl')
+    async def jsk_vanitybl(self, ctx, gid: int, *, reason: str):
+        guild = self.bot.get_guild(gid)
+        if not guild:
+            return await ctx.error(f'Unknown Guild')
+        con = await self.bot.db.acquire()
+        async with con.transaction():
+            query = 'INSERT INTO vanitybl (\"guild\", \"gid\", \"reason\") VALUES ($1, $2, $3);'
+            await self.bot.db.execute(query, guild.name, guild.id, reason)
+        await self.bot.db.release(con)
+        await self.bot.get_cog('Vanity URLs').delete_guild(guild.id)
+        return await ctx.success(f'Successfully blacklisted {guild} from vanity features!')
+
+    @jsk.command(name='vanityubl')
+    async def jsk_vanitybl(self, ctx, gid: int):
+        guild = self.bot.get_guild(gid)
+        if not guild:
+            return await ctx.error(f'Unknown Guild')
+        con = await self.bot.db.acquire()
+        async with con.transaction():
+            query = 'DELETE FROM vanitybl WHERE gid=$1;'
+            await self.bot.db.execute(query, guild.id)
+        await self.bot.db.release(con)
+        return await ctx.success(f'Successfully unblacklisted {guild} from vanity features!')
 
     @jsk.command(name='setdesc')
     async def jsk_setdesc(self, ctx, gid: int, *, desc: str):
