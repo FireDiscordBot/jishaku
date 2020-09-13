@@ -599,7 +599,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         con = await self.bot.db.acquire()
         async with con.transaction():
             query = 'INSERT INTO vanity (\"gid\", \"code\", \"invite\") VALUES ($1, $2, $3);'
-            await self.bot.db.execute(query, gid, code, inv)
+            await self.bot.db.execute(query, str(gid), code, inv)
         await self.bot.db.release(con)
         await self.bot.get_cog('Vanity URLs').request_fetch()
         return await ctx.success(f'Successfully created https://{"test." if self.bot.dev else ""}inv.wtf/{code}')
@@ -612,7 +612,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         con = await self.bot.db.acquire()
         async with con.transaction():
             query = 'INSERT INTO vanitybl (\"guild\", \"gid\", \"reason\") VALUES ($1, $2, $3);'
-            await self.bot.db.execute(query, guild.name, guild.id, reason)
+            await self.bot.db.execute(query, guild.name, str(guild.id), reason)
         await self.bot.db.release(con)
         await self.bot.get_cog('Vanity URLs').delete_guild(guild.id)
         return await ctx.success(f'Successfully blacklisted {guild} from vanity features!')
@@ -625,7 +625,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         con = await self.bot.db.acquire()
         async with con.transaction():
             query = 'DELETE FROM vanitybl WHERE gid=$1;'
-            await self.bot.db.execute(query, guild.id)
+            await self.bot.db.execute(query, str(guild.id))
         await self.bot.db.release(con)
         return await ctx.success(f'Successfully unblacklisted {guild} from vanity features!')
 
