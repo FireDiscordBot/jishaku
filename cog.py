@@ -103,7 +103,8 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         """
 
         self.task_count += 1
-        cmdtask = CommandTask(self.task_count, ctx, asyncio.Task.current_task())
+        cmdtask = CommandTask(self.task_count, ctx,
+                              asyncio.Task.current_task())
         self.tasks.append(cmdtask)
 
         try:
@@ -119,7 +120,6 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         if not await ctx.bot.is_owner(ctx.author):
             raise commands.NotOwner("You must own this bot to use Jishaku.")
         return True
-
 
     @commands.group(name="admin", aliases=["administration", "jsk"], hidden=JISHAKU_HIDE,
                     invoke_without_command=True, ignore_extra=False)
@@ -152,24 +152,30 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
                 pid = proc.pid
                 thread_count = proc.num_threads()
 
-                summary.append(f"Running on PID {pid} (`{name}`) with {thread_count} thread(s).")
+                summary.append(
+                    f"Running on PID {pid} (`{name}`) with {thread_count} thread(s).")
 
                 summary.append("")  # blank line
 
         cache_summary = f"{len(self.bot.guilds)} guild(s) and {len(self.bot.users)} user(s)"
 
         if isinstance(self.bot, discord.AutoShardedClient):
-            summary.append(f"This bot is automatically sharded and can see {cache_summary}.")
+            summary.append(
+                f"This bot is automatically sharded and can see {cache_summary}.")
         elif self.bot.shard_count:
-            summary.append(f"This bot is manually sharded and can see {cache_summary}.")
+            summary.append(
+                f"This bot is manually sharded and can see {cache_summary}.")
         else:
-            summary.append(f"This bot is not sharded and can see {cache_summary}.")
+            summary.append(
+                f"This bot is not sharded and can see {cache_summary}.")
 
-        summary.append(f"Average websocket latency: {round(self.bot.latency * 1000, 2)}ms")
+        summary.append(
+            f"Average websocket latency: {round(self.bot.latency * 1000, 2)}ms")
 
         await ctx.send("\n".join(summary))
 
-    __cat_line_regex = re.compile(r"(?:\.\/+)?(.+?)(?:#L?(\d+)(?:\-L?(\d+))?)?$")
+    __cat_line_regex = re.compile(
+        r"(?:\.\/+)?(.+?)(?:#L?(\d+)(?:\-L?(\d+))?)?$")
 
     @jsk.command(name="cat")
     async def jsk_cat(self, ctx: commands.Context, argument: str):
@@ -206,7 +212,8 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
 
         try:
             with open(path, "rb") as file:
-                paginator = WrappedFilePaginator(file, line_span=line_span, max_size=1985)
+                paginator = WrappedFilePaginator(
+                    file, line_span=line_span, max_size=1985)
         except UnicodeDecodeError:
             return await ctx.send(f"`{path}`: Couldn't determine the encoding of this file.")
         except ValueError as exc:
@@ -233,7 +240,8 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         async with ReplResponseReactor(ctx):
             async with aiohttp.ClientSession(headers={'User-Agent': 'Fire Discord Bot'}) as session:
                 async with session.get(url) as response:
-                    content_type = response.headers.get('Content-Type', 'text/plain').lower()
+                    content_type = response.headers.get(
+                        'Content-Type', 'text/plain').lower()
                     if content_type == 'application/json':
                         data = await response.json()
                         data = json.dumps(data, indent=2).encode('utf-8')
@@ -242,7 +250,8 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
                         f = discord.File(io.BytesIO((await response.read())), filename=f'image.{ext}')
                         return await ctx.send(file=f)
                     elif any(ext in content_type for ext in ['png', 'jpg', 'jpeg', 'gif']):
-                        ext = [ext for ext in ['png', 'jpg', 'jpeg', 'gif'] if ext in content_type][0]
+                        ext = [ext for ext in ['png', 'jpg', 'jpeg',
+                                               'gif'] if ext in content_type][0]
                         f = discord.File(io.BytesIO((await response.read())), filename=f'image.{ext}')
                         return await ctx.send(file=f)
                     else:
@@ -257,13 +266,15 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
                 return await ctx.send(f"HTTP response was empty (status code {code}).")
 
             try:
-                paginator = WrappedFilePaginator(io.BytesIO(data), language_hints=hints, max_size=1985)
+                paginator = WrappedFilePaginator(io.BytesIO(
+                    data), language_hints=hints, max_size=1985)
             except UnicodeDecodeError:
                 return await ctx.send(f"Couldn't determine the encoding of the response. (status code {code})")
             except ValueError as exc:
                 return await ctx.send(f"Couldn't read response (status code {code}), {exc}")
 
-            interface = PaginatorInterface(ctx.bot, paginator, owner=ctx.author)
+            interface = PaginatorInterface(
+                ctx.bot, paginator, owner=ctx.author)
             await interface.send_to(ctx)
 
     @jsk.command(name="tasks")
@@ -292,7 +303,6 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         If the index passed is -1, will cancel the last task instead.
         """
 
-
         if not self.tasks:
             return await ctx.error("No tasks to cancel.")
 
@@ -314,7 +324,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
 
         task.task.cancel()
         return await ctx.success(f"Cancelled task {task.index}: `{task.ctx.command.qualified_name}`,"
-                              f" invoked at {task.ctx.message.created_at.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+                                 f" invoked at {task.ctx.message.created_at.strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
     @jsk.command(name="retain")
     async def jsk_retain(self, ctx: commands.Context, *, toggle: bool):
@@ -384,22 +394,32 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
                         if len(result) > 1024:
                             # inconsistency here, results get wrapped in codeblocks when they are too large
                             #  but don't if they're not. probably not that bad, but noting for later review
-                            paginator = WrappedPaginator(prefix='```py', suffix='```', max_size=1985)
+                            paginator = WrappedPaginator(
+                                prefix='```py', suffix='```', max_size=1985)
                             paginator.add_line(result)
-                            embed = discord.Embed(title="<:check:674359197378281472> Evaluation Complete", colour=ctx.author.color, description=f"Output Type: {resulttype}")
-                            embed.add_field(name=":inbox_tray: Input", value=f"```py\n{argument.content}```", inline=False)
-                            embed.set_footer(text=f'Evaluated in {end - start:.3f}s.')
-                            paginatorembed = discord.Embed(colour=ctx.author.color)
-                            interface = PaginatorEmbedInterface(ctx.bot, paginator, owner=ctx.author, _embed=paginatorembed)
+                            embed = discord.Embed(title="<:check:674359197378281472> Evaluation Complete",
+                                                  colour=ctx.author.color, description=f"Output Type: {resulttype}")
+                            embed.add_field(
+                                name=":inbox_tray: Input", value=f"```py\n{argument.content}```", inline=False)
+                            embed.set_footer(
+                                text=f'Evaluated in {end - start:.3f}s.')
+                            paginatorembed = discord.Embed(
+                                colour=ctx.author.color)
+                            interface = PaginatorEmbedInterface(
+                                ctx.bot, paginator, owner=ctx.author, _embed=paginatorembed)
                             await ctx.send(embed=embed)
                             await interface.send_to(ctx)
                         else:
                             if result.strip() == '':
                                 result = "\u200b"
-                            embed = discord.Embed(title="<:check:674359197378281472> Evaluation Complete", colour=ctx.author.color, description=f"Output Type: {resulttype}")
-                            embed.add_field(name=":inbox_tray: Input", value=f"```py\n{argument.content}```", inline=False)
-                            embed.add_field(name=":outbox_tray: Output", value=f"```py\n{result}```", inline=False)
-                            embed.set_footer(text=f'Evaluated in {end - start:.3f}s.')
+                            embed = discord.Embed(title="<:check:674359197378281472> Evaluation Complete",
+                                                  colour=ctx.author.color, description=f"Output Type: {resulttype}")
+                            embed.add_field(
+                                name=":inbox_tray: Input", value=f"```py\n{argument.content}```", inline=False)
+                            embed.add_field(
+                                name=":outbox_tray: Output", value=f"```py\n{result}```", inline=False)
+                            embed.set_footer(
+                                text=f'Evaluated in {end - start:.3f}s.')
                             await ctx.send(embed=embed)
 
     @jsk.command(name="py_inspect", aliases=["pyi", "python_inspect", "pythoninspect"])
@@ -440,9 +460,12 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
                     output.append('```')
                     res = '\n'.join(output)
 
-                    embed = discord.Embed(title="<:check:674359197378281472> Evaluation Complete", colour=ctx.author.color)
-                    embed.add_field(name=":inbox_tray: Input", value=f"```py\n{argument.content}```", inline=False)
-                    embed.add_field(name=":outbox_tray: Output", value=f"{res}", inline=False)
+                    embed = discord.Embed(
+                        title="<:check:674359197378281472> Evaluation Complete", colour=ctx.author.color)
+                    embed.add_field(
+                        name=":inbox_tray: Input", value=f"```py\n{argument.content}```", inline=False)
+                    embed.add_field(name=":outbox_tray: Output",
+                                    value=f"{res}", inline=False)
                     await ctx.send(embed=embed)
 
     @jsk.command(name="shell", aliases=["sh", "cmd"])
@@ -458,7 +481,8 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
                 paginator = WrappedPaginator(prefix="```sh", max_size=1985)
                 paginator.add_line(f"$ {argument.content}\n")
 
-                interface = PaginatorInterface(ctx.bot, paginator, owner=ctx.author)
+                interface = PaginatorInterface(
+                    ctx.bot, paginator, owner=ctx.author)
                 self.bot.loop.create_task(interface.send_to(ctx))
 
                 with ShellReader(argument.content) as reader:
@@ -517,14 +541,16 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
             if extension == 'jishaku':
                 tasks = self.tasks.copy()
             method, icon = (
-                (self.bot.reload_extension, "\N{CLOCKWISE RIGHTWARDS AND LEFTWARDS OPEN CIRCLE ARROWS}")
+                (self.bot.reload_extension,
+                 "\N{CLOCKWISE RIGHTWARDS AND LEFTWARDS OPEN CIRCLE ARROWS}")
                 if extension in self.bot.extensions else
                 (self.bot.load_extension, "\N{INBOX TRAY}")
             )
             try:
                 method(extension)
             except Exception as exc:  # pylint: disable=broad-except
-                traceback_data = ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__, 1))
+                traceback_data = ''.join(traceback.format_exception(
+                    type(exc), exc, exc.__traceback__, 1))
 
                 paginator.add_line(
                     f"{icon}\N{WARNING SIGN} `{extension}`\n```py\n{traceback_data}\n```",
@@ -534,7 +560,6 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
                 paginator.add_line(f"{icon} `{extension}`", empty=True)
                 if tasks:
                     self.bot.get_cog('Jishaku').tasks = tasks
-
 
         for page in paginator.pages:
             await ctx.send(page)
@@ -556,7 +581,8 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
                     await self.bot.get_cog('Fire API').stop()
                 self.bot.unload_extension(extension)
             except Exception as exc:  # pylint: disable=broad-except
-                traceback_data = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__, 1))
+                traceback_data = "".join(traceback.format_exception(
+                    type(exc), exc, exc.__traceback__, 1))
 
                 paginator.add_line(
                     f"{icon}\N{WARNING SIGN} `{extension}`\n```py\n{traceback_data}\n```",
@@ -617,7 +643,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
             con = await self.bot.db.acquire()
             async with con.transaction():
                 query = 'INSERT INTO aliases (\"uid\", \"aliases\") VALUES ($1, $2);'
-                await self.bot.db.execute(query, user.id, [alias])
+                await self.bot.db.execute(query, str(user.id), [alias])
             await self.bot.db.release(con)
         else:
             aliases = json.loads((await self.bot.redis.get('aliases', encoding='utf-8')))
@@ -626,7 +652,7 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
             con = await self.bot.db.acquire()
             async with con.transaction():
                 query = 'UPDATE aliases SET \"aliases\"=$2 WHERE uid = $1;'
-                await self.bot.db.execute(query, user.id, aliases)
+                await self.bot.db.execute(query, str(user.id), aliases)
             await self.bot.db.release(con)
         await self.bot.get_cog('Settings').load_aliases()
         return await ctx.success(f'Successfully added alias')
@@ -634,14 +660,18 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
     @jsk.command(name='delalias')
     async def jsk_delalias(self, ctx, user: UserWithFallback, *, alias: str):
         if alias in self.bot.aliases and alias != 'hasalias':
-            aliases = [a for a in self.bot.aliases if a != 'hasalias' and self.bot.aliases[a] == user.id]
+            aliases = [a for a in self.bot.aliases if a !=
+                       'hasalias' and self.bot.aliases[a] == user.id]
             if alias not in aliases:
                 return await ctx.error(f'Alias doesn\'t belong to the specified user')
             aliases.remove(alias)
             con = await self.bot.db.acquire()
             async with con.transaction():
-                query = 'UPDATE aliases SET \"aliases\"=$2 WHERE uid = $1;'
-                await self.bot.db.execute(query, user.id, aliases)
+                if aliases:
+                    query = 'UPDATE aliases SET \"aliases\"=$2 WHERE uid = $1;'
+                else:
+                    query = 'DELETE FROM aliases WHERE uid=$1;'
+                await self.bot.db.execute(query, str(user.id), aliases)
             await self.bot.db.release(con)
         else:
             return await ctx.error('Invalid alias')
@@ -917,7 +947,8 @@ class Jishaku(commands.Cog):  # pylint: disable=too-many-public-methods
         # getsourcelines for some reason returns WITH line endings
         source_lines = ''.join(source_lines).split('\n')
 
-        paginator = WrappedPaginator(prefix='```py', suffix='```', max_size=1985)
+        paginator = WrappedPaginator(
+            prefix='```py', suffix='```', max_size=1985)
         for line in source_lines:
             paginator.add_line(line)
 
